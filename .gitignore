@@ -1,0 +1,26 @@
+# Ambiente virtual
+venv/
+.env/
+env/
+
+# Cache Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Arquivos de saída gerados
+*.txt
+!requirements.txt
+
+# PDFs de teste
+*.pdf
+
+# IDEs
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Sistema
+.DS_Store
+Thumbs.db
