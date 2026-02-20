@@ -8,6 +8,7 @@ Modo CLI:
     python extrator.py --input arquivo.pdf
     python extrator.py --input arquivo.pdf --pages 1-3,5
     python extrator.py --input arquivo.pdf --output resultado.txt
+    python extrator.py --input arquivo.pdf --senha minha_senha
 """
 
 import argparse
@@ -57,22 +58,37 @@ def parse_page_ranges(pages_str: str, total_pages: int) -> list:
     return sorted(indices)
 
 
-def open_pdf(filepath: str) -> PdfReader:
+def open_pdf(filepath: str, senha: str = None) -> PdfReader:
     """
-    Abre e valida um arquivo PDF.
+    Abre e valida um arquivo PDF. Suporta PDFs com senha.
+
+    Args:
+        filepath: Caminho para o arquivo PDF
+        senha: Senha do PDF (opcional)
 
     Raises:
         FileNotFoundError: Arquivo não encontrado
-        ValueError: PDF criptografado ou inválido
+        ValueError: PDF inválido ou senha incorreta
     """
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"Arquivo não encontrado: '{filepath}'")
+
     try:
         reader = PdfReader(filepath)
     except PdfReadError as e:
         raise ValueError(f"Erro ao ler o PDF: {e}")
+
+    # Verifica se o PDF tem senha
     if reader.is_encrypted:
-        raise ValueError("Este PDF está criptografado. Use um PDF sem proteção por senha.")
+        if not senha:
+            raise ValueError("Este PDF está protegido por senha. Informe a senha para continuar.")
+
+        # Tenta descriptografar com a senha fornecida
+        # resultado 0 = senha errada, 1 ou 2 = senha correta
+        resultado = reader.decrypt(senha)
+        if resultado == 0:
+            raise ValueError("Senha incorreta. Verifique a senha e tente novamente.")
+
     return reader
 
 
@@ -130,10 +146,27 @@ def modo_interativo():
         if not filepath:
             print("  ERRO: Nenhum caminho informado. Tente novamente.\n")
             continue
+
+        # Tenta abrir sem senha primeiro
         try:
             reader = open_pdf(filepath)
             break
-        except (FileNotFoundError, ValueError) as e:
+        except ValueError as e:
+            # Se precisar de senha, pede ao usuário
+            if "senha" in str(e).lower():
+                print(f"\n  Este PDF esta protegido por senha.")
+                while True:
+                    senha = input("  Digite a senha do PDF: ").strip()
+                    try:
+                        reader = open_pdf(filepath, senha)
+                        print("  Senha correta! PDF desbloqueado com sucesso.")
+                        break
+                    except ValueError as e2:
+                        print(f"  ERRO: {e2}\n")
+                break
+            else:
+                print(f"  ERRO: {e}\n")
+        except FileNotFoundError as e:
             print(f"  ERRO: {e}\n")
 
     total_pages = len(reader.pages)
@@ -242,11 +275,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "  python extrator.py --input doc.pdf --pages 1\n"
             "  python extrator.py --input doc.pdf --pages 1-3,5,10\n"
             "  python extrator.py --input doc.pdf --output resultado.txt\n"
+            "  python extrator.py --input doc.pdf --senha minha_senha\n"
         ),
     )
     parser.add_argument("--input", help="Caminho para o arquivo PDF de entrada")
     parser.add_argument("--pages", default=None, help='Paginas a extrair. Ex: "1", "1-3", "1-3,5,10"')
     parser.add_argument("--output", default=None, help="Arquivo .txt de saida (opcional)")
+    parser.add_argument("--senha", default=None, help="Senha do PDF protegido (opcional)")
     return parser
 
 
@@ -256,7 +291,7 @@ def modo_cli(args):
     print("-" * 40)
 
     try:
-        reader = open_pdf(args.input)
+        reader = open_pdf(args.input, args.senha)
     except (FileNotFoundError, ValueError) as e:
         print(f"  ERRO: {e}", file=sys.stderr)
         sys.exit(1)
